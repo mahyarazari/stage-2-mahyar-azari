@@ -93,3 +93,11 @@ rate_per = 10000           # rates are complaints per 10,000 residents
 # PGPASSWORD or the pgpass file, and the port from PGPORT (default 5432).
 # The DATABASE_URL environment variable replaces this whole URL.
 url = "postgresql+psycopg://postgres@localhost/dba_stage2"
+
+[load]
+# Load stage (stage 2): the published outputs go into PostgreSQL, in one transaction.
+# Each SQL file runs inside that transaction with search_path set to `schema`, so the
+# files use unqualified names. before_load builds the tables, after_load what needs data.
+schema = "nyc311"
+before_load = ["sql/nyc311/10_tables.sql"]
+after_load = []
