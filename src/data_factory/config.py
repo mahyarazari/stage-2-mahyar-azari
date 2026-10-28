@@ -10,6 +10,7 @@ reason next to the setting.
 """
 from __future__ import annotations
 
+import os
 import re
 import tomllib
 from dataclasses import dataclass
@@ -24,6 +25,8 @@ from data_factory.exceptions import ConfigError
 
 ZIP_PATTERN = re.compile(r"\d{5}")
 AGGREGATE_LEVELS = ("borough", "modzcta")
+DATABASE_URL_ENV = "DATABASE_URL"            # replaces [database] url when set (D39)
+DATABASE_URL_PREFIX = "postgresql+psycopg://"  # SQLAlchemy dialect + psycopg 3 driver (D38)
 
 
 @dataclass(frozen=True)
@@ -77,6 +80,12 @@ class CleanConfig:
 
 
 @dataclass(frozen=True)
+class DatabaseConfig:
+    url: str        # SQLAlchemy URL without a password; the driver reads PGPASSWORD / pgpass (D39)
+    source: str     # where the URL came from: the config file or the DATABASE_URL variable
+
+
+@dataclass(frozen=True)
 class Config:
     path: Path
     source: SourceConfig
@@ -89,6 +98,7 @@ class Config:
     max_quarantine_ratio: float
     clean: CleanConfig
     aggregate: AggregateConfig
+    database: DatabaseConfig
 
 
 # ---------------------------------------------------------------- small readers
@@ -250,6 +260,16 @@ def _read_aggregate(data: dict[str, Any]) -> AggregateConfig:
                            rate_per=int(_positive(rate_per, "[aggregate] rate_per")))
 
 
+def _read_database(data: dict[str, Any]) -> DatabaseConfig:
+    section = _section(data, "database")
+    url, source = _get(section, "database", "url", str), "factory.toml"
+    if os.environ.get(DATABASE_URL_ENV):
+        url, source = os.environ[DATABASE_URL_ENV], DATABASE_URL_ENV
+    if not url.startswith(DATABASE_URL_PREFIX):
+        raise ConfigError(f"database url from {source} must start with '{DATABASE_URL_PREFIX}'")
+    return DatabaseConfig(url=url, source=source)
+
+
 # ---------------------------------------------------------------- entry point
 def load_config(path: str | Path) -> Config:
     """Read, validate and return the configuration. Any problem raises ConfigError."""
@@ -279,4 +299,5 @@ def load_config(path: str | Path) -> Config:
         max_quarantine_ratio=_read_quarantine(data),
         clean=_read_clean(data),
         aggregate=_read_aggregate(data),
+        database=_read_database(data),
     )
