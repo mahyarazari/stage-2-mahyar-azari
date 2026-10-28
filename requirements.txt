@@ -67,6 +67,8 @@ platformdirs==4.13.5
 prometheus_client==0.26.0
 prompt_toolkit==3.0.53
 psutil==7.2.2
+psycopg==3.3.6
+psycopg-binary==3.3.6
 pure_eval==0.2.4
 pycparser==3.12
 Pygments==2.21.0
@@ -85,6 +87,7 @@ rpds-py==2026.9.1
 Send2Trash==2.1.0
 six==1.17.0
 soupsieve==3.0.4
+SQLAlchemy==2.1.6
 stack-data==0.6.3
 terminado==0.18.1
 tinycss2==1.5.1
