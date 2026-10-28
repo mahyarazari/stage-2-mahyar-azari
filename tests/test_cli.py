@@ -48,6 +48,7 @@ class CliTests(unittest.TestCase):
         with mock.patch.dict(pipeline.STAGES, stages), \
              mock.patch.dict(olist_pipeline.STAGES, olist_stages), \
              mock.patch.object(olist_pipeline, "record_run"), \
+             mock.patch("data_factory.cli.ensure_database"), \
              mock.patch.object(pipeline, "record_run") as self.record_run:
             code = main(["--config", PROJECT_CONFIG, *args])
         return code, calls

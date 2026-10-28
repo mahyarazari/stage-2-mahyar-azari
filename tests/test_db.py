@@ -6,8 +6,13 @@ from unittest import mock
 
 from data_factory import cli
 from data_factory.config import DATABASE_URL_ENV, DatabaseConfig, load_config
-from data_factory.db import database, make_engine, safe_url, server_version
+import uuid
+
+from psycopg import sql
+
+from data_factory.db import database, ensure_database, make_engine, safe_url, server_version
 from data_factory.exceptions import ConfigError, DatabaseError, ExitCode
+from tests.db_helpers import needs_database
 from tests.test_config import ConfigFileMixin, PROJECT_CONFIG
 
 # Nothing listens on port 1: connecting fails at once, without any network.
@@ -63,6 +68,31 @@ class ConnectionHelperTests(unittest.TestCase):
         with mock.patch.dict(os.environ, {DATABASE_URL_ENV: UNREACHABLE}):
             code = cli.main(["--config", str(PROJECT_CONFIG), "check-db"])
         self.assertEqual(code, ExitCode.DATABASE)
+
+
+@needs_database
+class EnsureDatabaseTests(unittest.TestCase):
+    def setUp(self):
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop(DATABASE_URL_ENV, None)
+            base = load_config(PROJECT_CONFIG).database
+        self.name = f"test_db_{uuid.uuid4().hex[:8]}"
+        url = base.url.rsplit("/", 1)[0] + "/" + self.name
+        self.settings = DatabaseConfig(url=url, source="test", maintenance_database=base.maintenance_database)
+
+    def tearDown(self):
+        admin = make_engine(DatabaseConfig(url=self.settings.url.rsplit("/", 1)[0] + "/"
+                                           + self.settings.maintenance_database, source="test"))
+        with admin.connect().execution_options(isolation_level="AUTOCOMMIT") as connection:
+            with connection.connection.driver_connection.cursor() as cursor:
+                cursor.execute(sql.SQL("DROP DATABASE IF EXISTS {}").format(sql.Identifier(self.name)))
+        admin.dispose()
+
+    def test_missing_database_is_created_once(self):
+        self.assertTrue(ensure_database(self.settings))
+        self.assertFalse(ensure_database(self.settings))           # second call: nothing to do
+        with database(self.settings) as engine:
+            self.assertIn("PostgreSQL", server_version(engine))
 
 
 if __name__ == "__main__":

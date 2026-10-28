@@ -17,7 +17,7 @@ from pathlib import Path
 
 from data_factory import olist_pipeline, pipeline
 from data_factory.config import load_config
-from data_factory.db import database, safe_url, server_version
+from data_factory.db import database, ensure_database, safe_url, server_version
 from data_factory.exceptions import ExitCode, FactoryError
 
 log = logging.getLogger("data_factory")
@@ -91,6 +91,8 @@ def main(argv: list[str] | None = None) -> int:
                 log.info("connected to %s (url from %s): %s", safe_url(config.database.url),
                          config.database.source, server_version(engine))
             return ExitCode.OK
+        if args.stages is None or "load" in args.stages:
+            ensure_database(config.database)        # an empty server is enough (one command)
         for dataset in (DATASETS if args.dataset == "all" else (args.dataset,)):
             _run_dataset(dataset, config, args)
         return ExitCode.OK
