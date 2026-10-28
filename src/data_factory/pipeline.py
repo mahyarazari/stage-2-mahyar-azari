@@ -20,7 +20,9 @@ from data_factory.contract import SOURCE_COLUMNS, Scope
 from data_factory.enrichment import enrich_dataset
 from data_factory.http_client import HttpClient
 from data_factory.ingest import fetch_snapshot, snapshot_id
-from data_factory.manifest import RunRecord, build_manifest, save_manifest
+from data_factory.db import database
+from data_factory.loading import TableLoad, load_tables, month_to_date, reasons_to_array
+from data_factory.manifest import RunRecord, build_manifest, code_version, file_sha256, save_manifest
 from data_factory.publish import CASES_FILE, METRICS, QUALITY_FILE, publish, summary_file
 from data_factory.exceptions import MissingInputError
 from data_factory.raw_store import RawPageStore, Segment, SnapshotChain
@@ -30,6 +32,7 @@ from data_factory.references import (
     load_population,
     reference_files,
 )
+from data_factory.sinks import PostgresSink
 from data_factory.sources import SocrataSource
 from data_factory.validation import QUARANTINE_FILE, validate_snapshot
 
@@ -160,13 +163,33 @@ def publish_stage(context: RunContext) -> None:
     publish(work_dir(config), config.paths.curated, effective_scope(config), config.aggregate)
 
 
-STAGE_NAMES = ("fetch", "validate", "clean", "enrich", "publish")
+def load_stage(context: RunContext) -> None:
+    """Stage 2: published outputs -> PostgreSQL, in one transaction (see loading.py)."""
+    config = context.config
+    snapshot = raw_store(config).directory.name
+    items = [
+        TableLoad("cases", config.paths.curated / CASES_FILE, month_to_date),
+        TableLoad("quarantine", config.paths.quarantine / snapshot / QUARANTINE_FILE, reasons_to_array),
+    ]
+    run = {"load_id": context.record.run_id,
+           "snapshot": "+".join(s.store.directory.name for s in chain(config).segments()),
+           "config_sha256": file_sha256(config.path),
+           "git_commit": code_version(config.path.parent)["git_commit"]}
+    with database(config.database) as engine:
+        sink = PostgresSink(engine, config.load.schema, config.load.before_load, config.load.after_load)
+        stats = load_tables(items, sink, config.clean.chunk_rows, run)
+    context.record.load = {"schema": config.load.schema, "load_id": stats.load_id, "rows": stats.rows}
+
+
+FILE_STAGES = ("fetch", "validate", "clean", "enrich", "publish")   # stage 1: files only
+STAGE_NAMES = FILE_STAGES + ("load",)                               # stage 2 adds the database
 STAGES: dict[str, Stage] = {
     "fetch": fetch,
     "validate": validate_stage,
     "clean": clean_stage,
     "enrich": enrich_stage,
     "publish": publish_stage,
+    "load": load_stage,
 }
 
 

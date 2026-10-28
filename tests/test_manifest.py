@@ -69,26 +69,31 @@ class ManifestPieceTests(unittest.TestCase):
         self.assertIsNone(result["identical_outputs"])
 
 
+def tiny_factory(root: Path):
+    """A configuration in `root` with a complete 5-record raw snapshot and cached references."""
+    (root / "factory.toml").write_text(PROJECT_CONFIG.read_text("utf-8"), "utf-8")
+    config = load_config(root / "factory.toml")
+
+    store = pipeline.raw_store(config)
+    store.write_page(1, [raw_record(1), raw_record(2), raw_record(3, zip_code="11249", borough="BROOKLYN")])
+    store.write_page(2, [raw_record(4, closed=None), raw_record(5, zip_code="N/A")])
+    store.mark_complete({"fetched_at_utc": "2026-10-24T12:00:00", "pages": 2, "records": 5})
+
+    files = reference_files(config.paths.raw / "references", config.references.population_url,
+                            config.references.zcta_county_url)
+    for path, text, url in ((files.population, json.dumps(POPULATION), "p"), (files.zcta_county, CENSUS, "c")):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, "utf-8")
+        path.with_name(path.name + ".meta.json").write_text(
+            json.dumps({"url": url, "retrieved_at_utc": "2026-10-24T12:00:00"}), "utf-8")
+    return config
+
+
 class EndToEndTests(unittest.TestCase):
     def setUp(self):
         logging.disable(logging.CRITICAL)
         self._tmp = tempfile.TemporaryDirectory()
-        root = Path(self._tmp.name)
-        (root / "factory.toml").write_text(PROJECT_CONFIG.read_text("utf-8"), "utf-8")
-        self.config = load_config(root / "factory.toml")
-
-        store = pipeline.raw_store(self.config)
-        store.write_page(1, [raw_record(1), raw_record(2), raw_record(3, zip_code="11249", borough="BROOKLYN")])
-        store.write_page(2, [raw_record(4, closed=None), raw_record(5, zip_code="N/A")])
-        store.mark_complete({"fetched_at_utc": "2026-10-24T12:00:00", "pages": 2, "records": 5})
-
-        files = reference_files(self.config.paths.raw / "references", self.config.references.population_url,
-                                self.config.references.zcta_county_url)
-        for path, text, url in ((files.population, json.dumps(POPULATION), "p"), (files.zcta_county, CENSUS, "c")):
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(text, "utf-8")
-            path.with_name(path.name + ".meta.json").write_text(
-                json.dumps({"url": url, "retrieved_at_utc": "2026-10-24T12:00:00"}), "utf-8")
+        self.config = tiny_factory(Path(self._tmp.name))
 
     def tearDown(self):
         self._tmp.cleanup()
@@ -96,7 +101,7 @@ class EndToEndTests(unittest.TestCase):
 
     def run_factory(self):
         with mock.patch.object(pipeline, "SocrataSource", FakeSource):
-            pipeline.run(pipeline.RunContext(config=self.config), list(pipeline.STAGE_NAMES))
+            pipeline.run(pipeline.RunContext(config=self.config), list(pipeline.FILE_STAGES))
         return json.loads((self.config.paths.curated / MANIFEST_FILE).read_text("utf-8"))
 
     def test_whole_factory_runs_and_manifest_has_the_required_fields(self):
@@ -124,7 +129,7 @@ class EndToEndTests(unittest.TestCase):
         with mock.patch.object(pipeline, "SocrataSource", FakeSource), \
              mock.patch.dict(pipeline.STAGES, {"clean": mock.Mock(side_effect=RuntimeError("boom"))}):
             with self.assertRaises(RuntimeError):
-                pipeline.run(pipeline.RunContext(config=self.config), list(pipeline.STAGE_NAMES))
+                pipeline.run(pipeline.RunContext(config=self.config), list(pipeline.FILE_STAGES))
         history = [p.name for p in (self.config.paths.work / "manifests").iterdir()]
         self.assertEqual(sum(name.endswith("_succeeded.json") for name in history), 1)
         self.assertEqual(sum(name.endswith("_failed.json") for name in history), 1)

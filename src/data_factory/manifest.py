@@ -53,6 +53,7 @@ class RunRecord:
     stages: list[str] = field(default_factory=list)
     stage_seconds: dict[str, float] = field(default_factory=dict)
     http: dict[str, int] = field(default_factory=dict)
+    load: dict[str, Any] = field(default_factory=dict)   # filled by the load stage (stage 2)
 
 
 # ---------------------------------------------------------------- pieces
@@ -155,6 +156,7 @@ def build_manifest(*, status: str, record: RunRecord, config_path: Path, scope: 
             "publish": stats["publish"],
         },
         "outputs": describe_outputs(outputs),
+        "load": record.load or None,
     }
     return manifest
 
