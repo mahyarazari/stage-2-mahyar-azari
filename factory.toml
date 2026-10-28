@@ -93,6 +93,9 @@ rate_per = 10000           # rates are complaints per 10,000 residents
 # PGPASSWORD or the pgpass file, and the port from PGPORT (default 5432).
 # The DATABASE_URL environment variable replaces this whole URL.
 url = "postgresql+psycopg://postgres@localhost/dba_stage2"
+# The database of the URL is created if it does not exist yet (one command from an empty
+# server); CREATE DATABASE has to be run while connected to another database: this one.
+maintenance_database = "postgres"
 
 [load]
 # Load stage (stage 2): the published outputs go into PostgreSQL, in one transaction.

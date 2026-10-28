@@ -85,6 +85,7 @@ class CleanConfig:
 class DatabaseConfig:
     url: str        # SQLAlchemy URL without a password; the driver reads PGPASSWORD / pgpass (D39)
     source: str     # where the URL came from: the config file or the DATABASE_URL variable
+    maintenance_database: str = "postgres"   # where CREATE DATABASE is run from
 
 
 @dataclass(frozen=True)
@@ -287,7 +288,8 @@ def _read_database(data: dict[str, Any]) -> DatabaseConfig:
         url, source = os.environ[DATABASE_URL_ENV], DATABASE_URL_ENV
     if not url.startswith(DATABASE_URL_PREFIX):
         raise ConfigError(f"database url from {source} must start with '{DATABASE_URL_PREFIX}'")
-    return DatabaseConfig(url=url, source=source)
+    maintenance = _get(section, "database", "maintenance_database", str)
+    return DatabaseConfig(url=url, source=source, maintenance_database=maintenance)
 
 
 def _read_load(data: dict[str, Any], base: Path, name: str = "load") -> LoadConfig:

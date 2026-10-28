@@ -12,6 +12,8 @@ import logging
 from contextlib import contextmanager
 from typing import Iterator
 
+import psycopg
+from psycopg import sql
 from sqlalchemy import Engine, create_engine, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import SQLAlchemyError
@@ -56,3 +58,29 @@ def server_version(engine: Engine) -> str:
     except SQLAlchemyError as error:
         raise DatabaseError(f"cannot connect to {safe_url(str(engine.url))}: "
                             f"{error.__class__.__name__}: {error.orig or error}") from None
+
+
+def ensure_database(settings: DatabaseConfig) -> bool:
+    """Create the database of the URL if the server does not have it yet. True if created.
+
+    CREATE DATABASE cannot run inside a transaction or while connected to that database,
+    so it runs in autocommit mode from the maintenance database. The name is composed as
+    an identifier (psycopg.sql), never pasted into the statement.
+    """
+    url = make_url(settings.url)
+    admin = create_engine(url.set(database=settings.maintenance_database), isolation_level="AUTOCOMMIT")
+    try:
+        with admin.connect() as connection:
+            found = connection.execute(text("SELECT 1 FROM pg_database WHERE datname = :name"),
+                                       {"name": url.database}).first()
+            if found:
+                return False
+            with connection.connection.driver_connection.cursor() as cursor:
+                cursor.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(url.database)))
+            log.info("created database %s", url.database)
+            return True
+    except (SQLAlchemyError, psycopg.Error) as error:
+        raise DatabaseError(f"cannot create database {url.database} on {safe_url(settings.url)}: "
+                            f"{error.__class__.__name__}: {getattr(error, 'orig', None) or error}") from None
+    finally:
+        admin.dispose()
