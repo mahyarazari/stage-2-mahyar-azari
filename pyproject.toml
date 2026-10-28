@@ -7,7 +7,7 @@ name = "data-factory"
 version = "0.1.0"
 description = "A resumable, idempotent data factory for NYC 311 service requests."
 requires-python = ">=3.11"
-dependencies = ["pandas", "requests"]
+dependencies = ["pandas", "requests", "sqlalchemy", "psycopg[binary]"]
 
 [project.scripts]
 data-factory = "data_factory.cli:main"

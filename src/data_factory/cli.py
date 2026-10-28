@@ -5,6 +5,7 @@ Examples:
     data-factory run --stages fetch           # only one stage
     data-factory run --since-last-run         # only records newer than the previous run
     data-factory check-config                 # validate the configuration and stop
+    data-factory check-db                     # connect to the database and print its version
 """
 from __future__ import annotations
 
@@ -14,6 +15,7 @@ from pathlib import Path
 
 from data_factory import pipeline
 from data_factory.config import load_config
+from data_factory.db import database, safe_url, server_version
 from data_factory.exceptions import ExitCode, FactoryError
 
 log = logging.getLogger("data_factory")
@@ -47,6 +49,7 @@ def build_parser() -> argparse.ArgumentParser:
                      help="fetch only records created after the previous run")
 
     commands.add_parser("check-config", help="load and validate the configuration, then stop")
+    commands.add_parser("check-db", help="connect to the database and print the server version")
     return parser
 
 
@@ -57,6 +60,11 @@ def main(argv: list[str] | None = None) -> int:
         config = load_config(args.config)
         if args.command == "check-config":
             log.info("configuration is valid: %s", config.path)
+            return ExitCode.OK
+        if args.command == "check-db":
+            with database(config.database) as engine:
+                log.info("connected to %s (url from %s): %s", safe_url(config.database.url),
+                         config.database.source, server_version(engine))
             return ExitCode.OK
         pipeline.run(pipeline.RunContext(config=config, since_last_run=args.since_last_run),
                      args.stages)

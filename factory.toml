@@ -86,3 +86,10 @@ longitude_range = [-74.27, -73.68]
 levels = ["borough", "modzcta"]
 min_cases_per_cell = 20    # D8: keeps 47.8% of neighbourhood cells; below ~20 a median is noise
 rate_per = 10000           # rates are complaints per 10,000 residents
+
+[database]
+# D34: a PostgreSQL server supplied by whoever runs the project (no Docker).
+# D39: no password and no port here. The driver (libpq) reads the password from
+# PGPASSWORD or the pgpass file, and the port from PGPORT (default 5432).
+# The DATABASE_URL environment variable replaces this whole URL.
+url = "postgresql+psycopg://postgres@localhost/dba_stage2"
