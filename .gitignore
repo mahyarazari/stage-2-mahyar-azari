@@ -7,4 +7,5 @@ data/curated/
 explore/output/
 data/quarantine/
 data/work/
-*.egg-info/brief/
+*.egg-info/
+brief/
