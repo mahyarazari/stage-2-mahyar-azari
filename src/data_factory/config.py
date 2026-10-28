@@ -105,6 +105,16 @@ class OlistConfig:
 
 
 @dataclass(frozen=True)
+class DashboardConfig:
+    start: pd.Timestamp       # period the dashboard queries are measured on
+    end: pd.Timestamp         # (end exclusive)
+    top_n: int                # number of sellers in Q4
+    budget_ms: float          # 95th-percentile limit per query
+    warmup_runs: int
+    timed_runs: int
+
+
+@dataclass(frozen=True)
 class Config:
     path: Path
     source: SourceConfig
@@ -120,6 +130,7 @@ class Config:
     database: DatabaseConfig
     load: LoadConfig
     olist: OlistConfig
+    dashboard: DashboardConfig
 
 
 # ---------------------------------------------------------------- small readers
@@ -324,6 +335,20 @@ def _read_olist(data: dict[str, Any], base: Path) -> OlistConfig:
                        longitude_range=_range(section, "longitude_range", "olist"), load=load)
 
 
+def _read_dashboard(data: dict[str, Any]) -> DashboardConfig:
+    section = _section(data, "dashboard")
+    start = _get(section, "dashboard", "start", datetime)
+    end = _get(section, "dashboard", "end", datetime)
+    if start >= end:
+        raise ConfigError(f"[dashboard] start ({start}) must be before end ({end})")
+    return DashboardConfig(
+        start=pd.Timestamp(start), end=pd.Timestamp(end),
+        top_n=int(_positive(_get(section, "dashboard", "top_n", int), "[dashboard] top_n")),
+        budget_ms=float(_positive(_get(section, "dashboard", "budget_ms", (int, float)), "[dashboard] budget_ms")),
+        warmup_runs=int(_get(section, "dashboard", "warmup_runs", int)),
+        timed_runs=int(_positive(_get(section, "dashboard", "timed_runs", int), "[dashboard] timed_runs")))
+
+
 # ---------------------------------------------------------------- entry point
 def load_config(path: str | Path) -> Config:
     """Read, validate and return the configuration. Any problem raises ConfigError."""
@@ -356,4 +381,5 @@ def load_config(path: str | Path) -> Config:
         database=_read_database(data),
         load=_read_load(data, base=path.parent),
         olist=_read_olist(data, base=path.parent),
+        dashboard=_read_dashboard(data),
     )
