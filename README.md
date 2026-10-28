@@ -30,6 +30,8 @@ datasets: **nyc311** (fetch → validate → clean → enrich → publish → lo
 ```bash
 data-factory run --dataset olist                 # one dataset
 data-factory run --dataset nyc311 --stages load  # one stage
+data-factory benchmark --label now --set snapshot # time the dashboard queries
+data-factory index-evidence                      # index plans, sizes, write cost
 ```
 
 ## Project layout
@@ -40,7 +42,8 @@ data-factory run --dataset nyc311 --stages load  # one stage
 | `src/data_factory/` | the package: sources, contracts, validation, sinks, pipelines, CLI |
 | `sql/nyc311/`, `sql/olist/` | all DDL, run by the load stage |
 | `data/` | raw downloads, intermediate and published files (not in Git) |
-| `solution.ipynb`, `report.md` | notebook and report |
+| `solution.ipynb`, `report.md` | stage-2 notebook (run after `data-factory run`) and report |
+| `docs/stage1/` | stage-1 notebook and report |
 | `docs/decisions.md` | every decision with its evidence |
 
 ## Exit codes
