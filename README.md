@@ -1,73 +1,56 @@
-# NYC 311 Data Factory — Stage 1
+# Data Factory — Stage 2 (PostgreSQL)
 
-## Getting Started
+Stage 1 built a resumable, deterministic factory for NYC 311 data. Stage 2 adds PostgreSQL
+as a new destination and the Olist e-commerce data as a new source, through the same package.
 
-From the project root directory, run the following commands using **Python 3.11 or later**:
+## Run it
+
+Requirements: **Python 3.11+** and a **PostgreSQL server** (measured on 18.6; no Docker needed).
 
 ```bash
-# Create a virtual environment
 python -m venv .venv
-
-# Activate the virtual environment (Windows)
-.venv\Scripts\activate
-
-# For macOS/Linux, use:
-# source .venv/bin/activate
-
-# Install dependencies
+.venv\Scripts\activate                      # macOS/Linux: source .venv/bin/activate
 python -m pip install -r requirements.txt
-
-# Install the project in editable mode
 python -m pip install -e .
 
-# Run all tests (no internet connection required)
-python -m unittest discover -s tests -t .
+# Connection: no password or port is stored in the repository.
+set PGPASSWORD=<postgres password>          # macOS/Linux: export PGPASSWORD=...
+set PGPORT=5432                             # only if the server is not on 5432
+# or replace the whole URL: set DATABASE_URL=postgresql+psycopg://user@host:port/dbname
 
-# Execute the complete data pipeline
-data-factory run
+data-factory check-db                       # connection test
+data-factory run                            # one command: empty server -> full database
+python -m unittest discover -s tests -t .   # tests (database tests are skipped without a server)
 ```
 
-## Pipeline Execution
-
-The data factory follows a five-stage pipeline:
-
-**Fetch → Validate → Clean → Enrich → Publish**
-
-Additional commands:
+`data-factory run` creates the database `dba_stage2` if it does not exist, then builds both
+datasets: **nyc311** (fetch → validate → clean → enrich → publish → load) and **olist**
+(fetch → validate → load). Each load runs in one transaction: all or nothing, safe to repeat.
 
 ```bash
-# Run specific pipeline stages
-data-factory run --stages validate,clean
-
-# Process only new data since the previous run
-data-factory run --since-last-run
-
-# Validate project configuration
-data-factory check-config
+data-factory run --dataset olist                 # one dataset
+data-factory run --dataset nyc311 --stages load  # one stage
 ```
 
-## Project Structure and Deliverables
+## Project layout
 
-| File / Directory | Description |
+| Path | Content |
 |---|---|
-| `factory.toml` | Pipeline configuration |
-| `data/curated/` | Processed datasets and pipeline outputs |
-| `run_manifest.json` | Execution metadata, stored in `data/curated/` |
-| `solution.ipynb` | Main analysis notebook; execute using **Restart & Run All** |
-| `report.md` | Summary of findings and implementation decisions |
-| `docs/decisions.md` | Technical decisions and their rationale |
+| `factory.toml` | every setting (sources, pinned checksums, schemas, SQL files) |
+| `src/data_factory/` | the package: sources, contracts, validation, sinks, pipelines, CLI |
+| `sql/nyc311/`, `sql/olist/` | all DDL, run by the load stage |
+| `data/` | raw downloads, intermediate and published files (not in Git) |
+| `solution.ipynb`, `report.md` | notebook and report |
+| `docs/decisions.md` | every decision with its evidence |
 
-## Exit Codes
+## Exit codes
 
-The CLI uses the following exit codes to indicate execution status:
-
-| Exit Code | Description |
+| Code | Meaning |
 |---|---|
-| `0` | Successful execution |
-| `10` | Configuration error |
-| `20–21` | Network-related errors |
-| `30–33` | Data-related errors |
-| `40` | Missing input from a preceding pipeline stage |
-| `1` | Unexpected or unhandled error |
-
-All unit tests can be executed **offline**, without an internet connection.
+| 0 | success |
+| 10 | configuration error |
+| 20–21 | network error / invalid response |
+| 30–34 | data error (validation, quarantine limit, source schema change, reference data, checksum mismatch) |
+| 40 | input of an earlier stage is missing |
+| 50 | database error (connection, constraint, load rolled back) |
+| 1 | unexpected error (bug) |
