@@ -17,6 +17,7 @@ class ExitCode(IntEnum):
     QUARANTINE_THRESHOLD = 31
     SOURCE_SCHEMA_CHANGED = 32
     REFERENCE_DATA = 33
+    CHECKSUM_MISMATCH = 34
     MISSING_INPUT = 40
     DATABASE = 50
 
@@ -88,3 +89,9 @@ class DatabaseError(FactoryError):
     """The database could not be reached, or refused a statement the factory needs."""
 
     exit_code = ExitCode.DATABASE
+
+
+class ChecksumMismatchError(DataValidationError):
+    """A downloaded or cached file is not byte for byte the file the configuration pins."""
+
+    exit_code = ExitCode.CHECKSUM_MISMATCH
