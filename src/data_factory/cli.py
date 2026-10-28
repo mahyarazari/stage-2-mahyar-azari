@@ -3,6 +3,7 @@
 Examples:
     data-factory run                          # every stage, from scratch to final outputs
     data-factory run --stages fetch           # only one stage
+    data-factory run --stages load            # only load the published outputs into PostgreSQL
     data-factory run --since-last-run         # only records newer than the previous run
     data-factory check-config                 # validate the configuration and stop
     data-factory check-db                     # connect to the database and print its version

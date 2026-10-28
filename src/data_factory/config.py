@@ -27,6 +27,7 @@ ZIP_PATTERN = re.compile(r"\d{5}")
 AGGREGATE_LEVELS = ("borough", "modzcta")
 DATABASE_URL_ENV = "DATABASE_URL"            # replaces [database] url when set (D39)
 DATABASE_URL_PREFIX = "postgresql+psycopg://"  # SQLAlchemy dialect + psycopg 3 driver (D38)
+SCHEMA_PATTERN = re.compile(r"[a-z_][a-z0-9_]{0,62}")
 
 
 @dataclass(frozen=True)
@@ -86,6 +87,13 @@ class DatabaseConfig:
 
 
 @dataclass(frozen=True)
+class LoadConfig:
+    schema: str                    # target schema of the load stage
+    before_load: tuple[Path, ...]  # SQL files run before the tables are filled (tables)
+    after_load: tuple[Path, ...]   # SQL files run after (indexes, views, functions)
+
+
+@dataclass(frozen=True)
 class Config:
     path: Path
     source: SourceConfig
@@ -99,6 +107,7 @@ class Config:
     clean: CleanConfig
     aggregate: AggregateConfig
     database: DatabaseConfig
+    load: LoadConfig
 
 
 # ---------------------------------------------------------------- small readers
@@ -270,6 +279,22 @@ def _read_database(data: dict[str, Any]) -> DatabaseConfig:
     return DatabaseConfig(url=url, source=source)
 
 
+def _read_load(data: dict[str, Any], base: Path) -> LoadConfig:
+    section = _section(data, "load")
+    schema = _get(section, "load", "schema", str)
+    if not SCHEMA_PATTERN.fullmatch(schema):
+        raise ConfigError(f"[load] schema must be a lower-case SQL name, got {schema!r}")
+
+    def files(key: str) -> tuple[Path, ...]:
+        values = _get(section, "load", key, list)
+        if not all(isinstance(v, str) and v.endswith(".sql") for v in values):
+            raise ConfigError(f"[load] {key} must be a list of .sql file paths")
+        # Existence is checked by the load stage, so a copied config file stays loadable.
+        return tuple(Path(v) if Path(v).is_absolute() else (base / v).resolve() for v in values)
+
+    return LoadConfig(schema=schema, before_load=files("before_load"), after_load=files("after_load"))
+
+
 # ---------------------------------------------------------------- entry point
 def load_config(path: str | Path) -> Config:
     """Read, validate and return the configuration. Any problem raises ConfigError."""
@@ -300,4 +325,5 @@ def load_config(path: str | Path) -> Config:
         clean=_read_clean(data),
         aggregate=_read_aggregate(data),
         database=_read_database(data),
+        load=_read_load(data, base=path.parent),
     )
