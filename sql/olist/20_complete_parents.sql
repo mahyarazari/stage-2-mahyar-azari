@@ -35,3 +35,7 @@ SELECT DISTINCT p.category_name, true
 FROM products p
 WHERE p.category_name IS NOT NULL
   AND NOT EXISTS (SELECT 1 FROM product_categories c WHERE c.category_name = p.category_name);
+
+-- Every lookup now exists: check the deferred foreign keys here (a real orphan fails the
+-- load now), so later files can build indexes on the checked tables.
+SET CONSTRAINTS ALL IMMEDIATE;

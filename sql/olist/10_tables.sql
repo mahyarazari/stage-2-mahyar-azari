@@ -16,7 +16,8 @@
 -- not matter and a real orphan still makes the whole load roll back.
 
 DROP TABLE IF EXISTS order_reviews, order_payments, order_items, orders, products, sellers,
-                     customers, zip_codes, product_categories, quarantine CASCADE;
+                     customers, zip_codes, product_categories, quarantine, snap_sales, snap_delivery,
+                     snap_review_delay, snap_sellers, snap_payments, snapshot_months CASCADE;
 
 CREATE TEMP TABLE geolocation_staging (       -- raw points, only for building zip_codes
     zip_code_prefix char(5) NOT NULL,

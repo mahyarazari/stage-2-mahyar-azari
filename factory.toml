@@ -130,7 +130,8 @@ longitude_range = [-74.5, -34.5]
 [olist.load]
 schema = "olist"
 before_load = ["sql/olist/10_tables.sql"]
-after_load = ["sql/olist/20_complete_parents.sql"]
+after_load = ["sql/olist/20_complete_parents.sql", "sql/olist/30_views_functions.sql",
+              "sql/olist/40_snapshots.sql", "sql/olist/50_indexes.sql", "sql/olist/60_refresh_snapshots.sql"]
 
 [dashboard]
 # The five product-team queries (sql/queries/) are measured with these parameters.
