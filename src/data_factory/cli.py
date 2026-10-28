@@ -13,6 +13,7 @@ Examples:
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 from pathlib import Path
 
@@ -73,6 +74,27 @@ def _benchmark(config, label: str, query_set: str = "baseline") -> None:
     log.info("saved timings and plans: %s", path)
 
 
+def _index_evidence(config) -> None:
+    from datetime import date
+    from data_factory import index_evidence as ev
+    month = date(2018, 1, 1)                     # a busy month (7,269 orders)
+    schema = config.olist.load.schema
+    with database(config.database) as engine:
+        result = {"month": str(month), "with_and_without": ev.with_and_without(engine, schema, month),
+                  "sizes": ev.sizes(engine, schema), "insert_cost_ms": ev.insert_cost(engine, schema)}
+    path = config.paths.work / "benchmarks" / "index_evidence.json"
+    path.write_text(json.dumps(result, indent=1, default=str) + "\n", encoding="utf-8", newline="\n")
+    for index, r in result["with_and_without"].items():
+        log.info("%s (%d KB): used by planner: %s; refresh %s ms without -> %s ms with; plan without %s; with %s",
+                 index, r["with"]["bytes"] // 1024, r["used_by_planner"], r["without"]["refresh_ms"],
+                 r["with"]["refresh_ms"], r["without"]["plan"]["nodes"], r["with"]["plan"]["nodes"])
+    log.info("insert of all orders (ms): %s", result["insert_cost_ms"])
+    for row in result["sizes"]:
+        log.info("size %-34s %-16s index %8d KB  table %8d KB", row["index"], row["table_name"],
+                 row["index_bytes"] // 1024, row["table_bytes"] // 1024)
+    log.info("saved: %s", path)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="data-factory",
                                      description="Build a clean NYC 311 dataset from the live API.")
@@ -96,6 +118,7 @@ def build_parser() -> argparse.ArgumentParser:
     bench.add_argument("--label", required=True, help="name of this measurement (e.g. baseline)")
     bench.add_argument("--set", dest="query_set", choices=tuple(benchmark.QUERY_SETS), default="baseline",
                        help="which versions of the queries to time (default: baseline)")
+    commands.add_parser("index-evidence", help="plans, sizes and write cost of the indexes (rolled back)")
     return parser
 
 
@@ -106,6 +129,9 @@ def main(argv: list[str] | None = None) -> int:
         config = load_config(args.config)
         if args.command == "check-config":
             log.info("configuration is valid: %s", config.path)
+            return ExitCode.OK
+        if args.command == "index-evidence":
+            _index_evidence(config)
             return ExitCode.OK
         if args.command == "benchmark":
             _benchmark(config, args.label, args.query_set)
