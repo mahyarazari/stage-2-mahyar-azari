@@ -28,6 +28,7 @@ AGGREGATE_LEVELS = ("borough", "modzcta")
 DATABASE_URL_ENV = "DATABASE_URL"            # replaces [database] url when set (D39)
 DATABASE_URL_PREFIX = "postgresql+psycopg://"  # SQLAlchemy dialect + psycopg 3 driver (D38)
 SCHEMA_PATTERN = re.compile(r"[a-z_][a-z0-9_]{0,62}")
+SHA256_PATTERN = re.compile(r"[0-9a-f]{64}")
 
 
 @dataclass(frozen=True)
@@ -94,6 +95,15 @@ class LoadConfig:
 
 
 @dataclass(frozen=True)
+class OlistConfig:
+    base_url: str                          # folder URL of the nine files (D35)
+    files: dict[str, str]                  # file name -> pinned sha256
+    latitude_range: tuple[float, float]    # geolocation points outside Brazil become missing
+    longitude_range: tuple[float, float]
+    load: LoadConfig
+
+
+@dataclass(frozen=True)
 class Config:
     path: Path
     source: SourceConfig
@@ -108,6 +118,7 @@ class Config:
     aggregate: AggregateConfig
     database: DatabaseConfig
     load: LoadConfig
+    olist: OlistConfig
 
 
 # ---------------------------------------------------------------- small readers
@@ -238,11 +249,11 @@ def _read_quarantine(data: dict[str, Any]) -> float:
     return ratio
 
 
-def _range(section: dict[str, Any], key: str) -> tuple[float, float]:
-    values = _get(section, "clean", key, list)
+def _range(section: dict[str, Any], key: str, section_name: str = "clean") -> tuple[float, float]:
+    values = _get(section, section_name, key, list)
     if (len(values) != 2 or not all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in values)
             or values[0] >= values[1]):
-        raise ConfigError(f"[clean] {key} must be [low, high] with low < high, got {values!r}")
+        raise ConfigError(f"[{section_name}] {key} must be [low, high] with low < high, got {values!r}")
     return float(values[0]), float(values[1])
 
 
@@ -279,20 +290,36 @@ def _read_database(data: dict[str, Any]) -> DatabaseConfig:
     return DatabaseConfig(url=url, source=source)
 
 
-def _read_load(data: dict[str, Any], base: Path) -> LoadConfig:
-    section = _section(data, "load")
-    schema = _get(section, "load", "schema", str)
+def _read_load(data: dict[str, Any], base: Path, name: str = "load") -> LoadConfig:
+    section = data.get(name) if name == "load" else _section(data, "olist").get("load")
+    if not isinstance(section, dict):
+        raise ConfigError(f"missing section [{name}]")
+    schema = _get(section, name, "schema", str)
     if not SCHEMA_PATTERN.fullmatch(schema):
-        raise ConfigError(f"[load] schema must be a lower-case SQL name, got {schema!r}")
+        raise ConfigError(f"[{name}] schema must be a lower-case SQL name, got {schema!r}")
 
     def files(key: str) -> tuple[Path, ...]:
-        values = _get(section, "load", key, list)
+        values = _get(section, name, key, list)
         if not all(isinstance(v, str) and v.endswith(".sql") for v in values):
-            raise ConfigError(f"[load] {key} must be a list of .sql file paths")
+            raise ConfigError(f"[{name}] {key} must be a list of .sql file paths")
         # Existence is checked by the load stage, so a copied config file stays loadable.
         return tuple(Path(v) if Path(v).is_absolute() else (base / v).resolve() for v in values)
 
     return LoadConfig(schema=schema, before_load=files("before_load"), after_load=files("after_load"))
+
+
+def _read_olist(data: dict[str, Any], base: Path) -> OlistConfig:
+    section = _section(data, "olist")
+    files = _get(section, "olist", "files", dict)
+    for name, digest in files.items():
+        if not (name.endswith(".csv") and isinstance(digest, str) and SHA256_PATTERN.fullmatch(digest)):
+            raise ConfigError(f"[olist.files] '{name}' must be a .csv name with a 64-character sha256")
+    load = _read_load(data, base, name="olist.load")
+    if load.schema == _read_load(data, base).schema:
+        raise ConfigError("[olist.load] schema must differ from [load] schema")
+    return OlistConfig(base_url=_get(section, "olist", "base_url", str).rstrip("/"), files=dict(files),
+                       latitude_range=_range(section, "latitude_range", "olist"),
+                       longitude_range=_range(section, "longitude_range", "olist"), load=load)
 
 
 # ---------------------------------------------------------------- entry point
@@ -326,4 +353,5 @@ def load_config(path: str | Path) -> Config:
         aggregate=_read_aggregate(data),
         database=_read_database(data),
         load=_read_load(data, base=path.parent),
+        olist=_read_olist(data, base=path.parent),
     )

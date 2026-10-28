@@ -120,7 +120,9 @@ class _PostgresSession:
         return self.cursor.fetchone()[0]
 
     def replace_table(self, table, columns, chunks) -> int:
-        self.cursor.execute(sql.SQL("TRUNCATE {}").format(sql.Identifier(table)))
+        # DELETE, not TRUNCATE: TRUNCATE refuses a table that a foreign key refers to. The
+        # load stages rebuild their tables first, so this deletes nothing in practice.
+        self.cursor.execute(sql.SQL("DELETE FROM {}").format(sql.Identifier(table)))
         rows = self._copy(table, columns, chunks)
         self.tables.append(table)
         stored = self.count(table)

@@ -91,6 +91,12 @@ def code_version(folder: Path) -> dict[str, Any]:
     return version
 
 
+def build_code_inputs(config_path: Path) -> dict[str, Any]:
+    """Code version and the identity of the configuration, shared by every dataset's manifest."""
+    code = code_version(config_path.parent)
+    return {"code": code, "config_sha256": file_sha256(config_path), "git_commit": code["git_commit"]}
+
+
 def _read_json(path: Path) -> dict[str, Any] | None:
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
 

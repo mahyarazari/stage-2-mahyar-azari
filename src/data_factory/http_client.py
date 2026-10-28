@@ -73,6 +73,10 @@ class HttpClient:
         """A plain-text file (e.g. a pipe-delimited table). An HTML page is refused."""
         return self._request("GET", url, params, None, _parse_text)
 
+    def get_bytes(self, url: str, params: dict[str, Any] | None = None) -> bytes:
+        """A file exactly as served (for checksums). An HTML page is refused."""
+        return self._request("GET", url, params, None, _parse_bytes)
+
     def request_json(self, method: str, url: str, params: dict[str, Any] | None = None,
                      body: Any = None) -> Any:
         return self._request(method, url, params, body, _parse_json)
@@ -146,6 +150,12 @@ def _parse_text(method: str, url: str, response: requests.Response) -> str:
     if "html" in response.headers.get("Content-Type", "").lower():
         raise InvalidResponseError(_content_problem(method, url, response, "a text file"))
     return response.text
+
+
+def _parse_bytes(method: str, url: str, response: requests.Response) -> bytes:
+    if "html" in response.headers.get("Content-Type", "").lower():
+        raise InvalidResponseError(_content_problem(method, url, response, "a file"))
+    return response.content
 
 
 def _retry_after_seconds(response: requests.Response) -> float | None:
