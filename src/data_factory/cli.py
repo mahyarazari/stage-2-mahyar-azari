@@ -59,15 +59,15 @@ def _run_dataset(dataset: str, config, args) -> None:
         olist_pipeline.run(pipeline.RunContext(config=config), stages)
 
 
-def _benchmark(config, label: str) -> None:
+def _benchmark(config, label: str, query_set: str = "baseline") -> None:
     path = config.paths.work / "benchmarks" / f"{label}.json"
     with database(config.database) as engine, engine.connect() as connection:
         connection.execute(text("SELECT set_config('search_path', :path, false)"),
                            {"path": config.olist.load.schema})
-        timings = benchmark.run_dashboard(connection, config.dashboard, label)
+        timings = benchmark.run_dashboard(connection, config.dashboard, label, query_set)
     benchmark.save_timings(timings, path)
     for t in timings:
-        log.info("%-34s median %8.2f ms  p95 %8.2f ms  max %8.2f ms  server %8.2f ms  rows %5d  %s",
+        log.info("%-40s median %8.2f ms  p95 %8.2f ms  max %8.2f ms  server %8.2f ms  rows %5d  %s",
                  t.query, t.median_ms, t.p95_ms, t.max_ms, t.server_ms, t.rows,
                  "OK" if t.within_budget else "OVER BUDGET")
     log.info("saved timings and plans: %s", path)
@@ -94,6 +94,8 @@ def build_parser() -> argparse.ArgumentParser:
     commands.add_parser("check-db", help="connect to the database and print the server version")
     bench = commands.add_parser("benchmark", help="time the dashboard queries and save their plans")
     bench.add_argument("--label", required=True, help="name of this measurement (e.g. baseline)")
+    bench.add_argument("--set", dest="query_set", choices=tuple(benchmark.QUERY_SETS), default="baseline",
+                       help="which versions of the queries to time (default: baseline)")
     return parser
 
 
@@ -106,7 +108,7 @@ def main(argv: list[str] | None = None) -> int:
             log.info("configuration is valid: %s", config.path)
             return ExitCode.OK
         if args.command == "benchmark":
-            _benchmark(config, args.label)
+            _benchmark(config, args.label, args.query_set)
             return ExitCode.OK
         if args.command == "check-db":
             with database(config.database) as engine:

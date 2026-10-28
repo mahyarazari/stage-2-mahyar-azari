@@ -123,10 +123,15 @@ def dashboard_params(settings) -> dict[str, dict[str, Any]]:
             for name in DASHBOARD_QUERIES}
 
 
-def run_dashboard(connection: Connection, settings, label: str) -> list[Timing]:
-    return [measure(connection, name, params, label, settings.warmup_runs, settings.timed_runs,
+QUERY_SETS = {"baseline": "", "rewrite": "_rewrite", "view": "_view", "snapshot": "_snapshot"}  # file suffix
+
+
+def run_dashboard(connection: Connection, settings, label: str, query_set: str = "baseline") -> list[Timing]:
+    suffix = QUERY_SETS[query_set]
+    return [measure(connection, name + suffix, params, label, settings.warmup_runs, settings.timed_runs,
                     settings.budget_ms)
-            for name, params in dashboard_params(settings).items()]
+            for name, params in dashboard_params(settings).items()
+            if (QUERY_DIR / f"{name}{suffix}.sql").exists()]
 
 
 def save_timings(timings: list[Timing], path: Path) -> None:
