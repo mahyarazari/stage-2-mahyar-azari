@@ -63,6 +63,7 @@ def _plan(connection: Connection, statement: str, params: dict) -> dict[str, Any
 
 
 def _timed_refresh(connection: Connection, month: date, runs: int) -> float:
+    connection.execute(text("CALL refresh_month(:m)"), {"m": month})       # warm-up (cache, plans)
     times = []
     for _ in range(runs):
         started = time.perf_counter()
@@ -71,7 +72,7 @@ def _timed_refresh(connection: Connection, month: date, runs: int) -> float:
     return round(sorted(times)[len(times) // 2], 1)
 
 
-def with_and_without(engine: Engine, schema: str, month: date, runs: int = 5) -> dict[str, Any]:
+def with_and_without(engine: Engine, schema: str, month: date, runs: int = 9) -> dict[str, Any]:
     """For each candidate: plan and refresh_month time without the index, then with it.
     Both states are made inside a rolled-back experiment, whatever the database has now."""
     params = {"start": month, "end": date(month.year + month.month // 12, month.month % 12 + 1, 1)}

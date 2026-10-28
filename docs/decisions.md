@@ -432,7 +432,7 @@ CSV را هم انسان می‌خواند و هم PostgreSQL در مرحلهٔ 
 
 **D57. Snapshot ماهانه با Procedure `refresh_month`.** گزینه‌ها: Index؛ بازنویسی؛ `work_mem`؛ View؛ snapshot. شاهد: بازنویسی و `work_mem` و View بالای بودجه ماندند؛ snapshot هر پنج کوئری را زیر بودجه برد با نتیجهٔ یکسان. از دست رفته: تازگی، فضا، نگهداری، میانهٔ Q5.
 
-**D58. Indexها.** `orders(purchased_at)` ماند (پلنر استفاده می‌کند)؛ `order_reviews(order_id)` ساخته و حذف شد (پلن عوض نشد). هزینهٔ نوشتن و حجم در نوتبوک.
+**D58. Indexها.** `orders(purchased_at)` ماند (پلنر برای فیلتر ماه استفاده می‌کند و آن مرحله سریع‌تر می‌شود؛ اثرش بر کل refresh در حد نوسان است چون join با کل `order_items` غالب است)؛ `order_reviews(order_id)` ساخته و حذف شد (پلن عوض نشد). هزینهٔ نوشتن و حجم در نوتبوک.
 
 **D59. Function `delay_band` و Viewهای `sold_orders` (ساده) و `order_lines` (چندجدولی).** Function داخل SELECT و داخل Procedure به کار رفته.
 
