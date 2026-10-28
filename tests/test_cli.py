@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from data_factory import pipeline
+from data_factory import olist_pipeline, pipeline
 from data_factory.cli import main
 from data_factory.exceptions import (
     ExitCode,
@@ -20,7 +20,8 @@ PROJECT_CONFIG = str(Path(__file__).resolve().parents[1] / "factory.toml")
 
 
 def fake_stages(**behaviour):
-    """Stages that record their calls; a stage given an exception raises it."""
+    """Stages of both datasets that record their calls ('olist:' prefix for Olist);
+    a stage given an exception raises it."""
     calls = []
 
     def make(name):
@@ -30,7 +31,9 @@ def fake_stages(**behaviour):
                 raise behaviour[name]
         return stage
 
-    return {name: make(name) for name in pipeline.STAGE_NAMES}, calls
+    nyc311 = {name: make(name) for name in pipeline.STAGE_NAMES}
+    olist = {name: make(f"olist:{name}") for name in olist_pipeline.STAGE_NAMES}
+    return nyc311, olist, calls
 
 
 class CliTests(unittest.TestCase):
@@ -41,8 +44,10 @@ class CliTests(unittest.TestCase):
         logging.disable(logging.NOTSET)
 
     def run_cli(self, *args, **behaviour):
-        stages, calls = fake_stages(**behaviour)
+        stages, olist_stages, calls = fake_stages(**behaviour)
         with mock.patch.dict(pipeline.STAGES, stages), \
+             mock.patch.dict(olist_pipeline.STAGES, olist_stages), \
+             mock.patch.object(olist_pipeline, "record_run"), \
              mock.patch.object(pipeline, "record_run") as self.record_run:
             code = main(["--config", PROJECT_CONFIG, *args])
         return code, calls
@@ -50,10 +55,16 @@ class CliTests(unittest.TestCase):
     def test_full_run_calls_every_stage_in_order(self):
         code, calls = self.run_cli("run")
         self.assertEqual(code, ExitCode.OK)
-        self.assertEqual(calls, list(pipeline.STAGE_NAMES))
+        self.assertEqual(calls, list(pipeline.STAGE_NAMES)
+                         + [f"olist:{name}" for name in olist_pipeline.STAGE_NAMES])
+
+    def test_dataset_option_runs_only_that_dataset(self):
+        code, calls = self.run_cli("run", "--dataset", "olist", "--stages", "load,fetch")
+        self.assertEqual(code, ExitCode.OK)
+        self.assertEqual(calls, ["olist:fetch", "olist:load"])
 
     def test_stage_selection_keeps_factory_order(self):
-        code, calls = self.run_cli("run", "--stages", "clean,fetch")
+        code, calls = self.run_cli("run", "--dataset", "nyc311", "--stages", "clean,fetch")
         self.assertEqual(code, ExitCode.OK)
         self.assertEqual(calls, ["fetch", "clean"])
 
