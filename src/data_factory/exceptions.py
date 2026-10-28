@@ -18,6 +18,7 @@ class ExitCode(IntEnum):
     SOURCE_SCHEMA_CHANGED = 32
     REFERENCE_DATA = 33
     MISSING_INPUT = 40
+    DATABASE = 50
 
 
 class FactoryError(Exception):
@@ -81,3 +82,9 @@ class ReferenceDataError(DataValidationError):
     """A reference table (population, zip-to-county) is missing columns or breaks its own rules."""
 
     exit_code = ExitCode.REFERENCE_DATA
+
+
+class DatabaseError(FactoryError):
+    """The database could not be reached, or refused a statement the factory needs."""
+
+    exit_code = ExitCode.DATABASE
