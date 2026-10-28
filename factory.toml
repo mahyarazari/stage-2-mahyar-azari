@@ -131,3 +131,13 @@ longitude_range = [-74.5, -34.5]
 schema = "olist"
 before_load = ["sql/olist/10_tables.sql"]
 after_load = ["sql/olist/20_complete_parents.sql"]
+
+[dashboard]
+# The five product-team queries (sql/queries/) are measured with these parameters.
+# Whole history = the heaviest case the dashboard can ask for.
+start = 2016-01-01T00:00:00
+end = 2019-01-01T00:00:00
+top_n = 20                 # Q4: number of sellers
+budget_ms = 200            # limit per query, on the 95th percentile of the timed runs
+warmup_runs = 3            # cache and plan warm, as for a dashboard opened often
+timed_runs = 30
